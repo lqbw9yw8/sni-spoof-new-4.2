@@ -1,0 +1,24 @@
+# Build
+/target
+**/*.rs.bk
+
+# Operator config (may contain tokens / pins)
+dpi_guard.toml
+
+# Kernel driver binaries — fetch from the official WinDivert release,
+# never commit them. See README.md / PROJECT_GUIDE.md.
+*.dll
+*.sys
+*.exe
+
+# Local archives / scratch
+*.zip
+*.tar.gz
+*.tgz
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
