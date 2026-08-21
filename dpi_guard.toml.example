@@ -1,0 +1,161 @@
+# dpi_guard.toml — copy to dpi_guard.toml next to the binary and edit.
+# Hot-reloaded: dpi_guard polls this file's mtime every second
+# (see src/config.rs HotReloadWatcher).
+#
+# Logging: set RUST_LOG=dpi_guard=debug (default is dpi_guard=info).
+
+# One of: "Stealth", "ChinaGfw", "RussiaDpi", "Aggressive", "ChinaRegional", "Henan".
+# Start with "Stealth". Identity-preserving (ASCII case only).
+# ChinaRegional/Henan = 2025 regional firewalls (Henan) that need combined TCP+TLS fragmentation
+# Henan uses 24-byte chunks + disorder + TTL decoys, ChinaRegional 32-byte.
+mutation_profile = "Stealth"
+
+# TTL for decoy packets (sequence::inject_ttl_limited_decoy). Must be
+# large enough to reach the inline DPI box, small enough to expire
+# before the real server. Measure hop count to the DPI box; 8 is a guess.
+decoy_ttl = 8
+
+# Seconds of connection idleness before flow state is cleared.
+idle_timeout_secs = 120
+
+# Optional: documented target for dns_guard hijack specs. Leave unset
+# to disable. Actual WFP redirect needs a signed callout driver.
+# trusted_dns = "1.1.1.1"
+
+# TCP payload chunk size for ClientHello segmentation.
+# 0 disables. Must be 0 or >= 8 (1 is rejected: classic DPI fingerprint).
+fragment_chunk_size = 64
+
+enable_decoys = true
+enable_sni_fragmentation = true
+
+# SYN-ACK/RST endpoint-swap foolers. Off by default.
+enable_swap_foolers = false
+
+# Never auto-spawns. If true, the PowerShell command is logged only.
+enable_kill_switch = false
+kill_switch_adapter = ""
+
+# Optional candidate IPs for connection::rotate_ip.
+# rotate_ips = ["1.1.1.1", "1.0.0.1"]
+
+# Strongly recommended: pin the SHA-256 digests of the official WinDivert
+# binaries so a tampered WinDivert.dll/.sys (loaded with kernel/admin
+# privileges) is refused. Leave empty = presence-only trust (warning logged).
+#
+# How to get the official hashes (example for WinDivert 2.2.2-A):
+#   Windows:  certutil -hashfile WinDivert.dll SHA256
+#             certutil -hashfile WinDivert64.sys SHA256
+#   Linux:    sha256sum WinDivert.dll WinDivert64.sys
+# Official release: https://reqrypt.org/windivert.html
+#                   https://github.com/basil00/Divert/releases
+#
+# Example — SHA-256 of the official WinDivert 2.2.2 (64-bit) binaries:
+#   WinDivert.dll     c1e060ee19444a259b2162f8af0f3fe8c4428a1c6f694dce20de194ac8d7d9a2
+#   WinDivert64.sys   8da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2
+# ALWAYS recompute these from the zip *you* downloaded (certutil -hashfile or
+# sha256sum) and replace the values below. The hashes are shown only so the
+# example is a real value instead of a fake placeholder — do not trust a
+# copy-pasted pin for a file you have not verified yourself.
+# win_divert_sha256 = [
+#   "c1e060ee19444a259b2162f8af0f3fe8c4428a1c6f694dce20de194ac8d7d9a2",
+#   "8da085332782708d8767bcace5327a6ec7283c17cfb85e40b03cd2323a90ddc2"
+# ]
+#
+# To pin only one variant (e.g. 64-bit only), list just that hash.
+# The check in engine.rs verifies *both* dll and sys files found next to
+# the exe are in the pinned list, using constant-time comparison.
+# Files over 16 MiB are refused (planted-file DoS protection).
+
+# Opt-in local dashboard (http://127.0.0.1:9090). Binds loopback only,
+# requires Host: 127.0.0.1 (localhost/DNS-rebind names are rejected) and a
+# bearer token on every API call. Leave web_ui_token empty to auto-generate
+# one (printed to the log at startup). A configured token must be >= 16
+# printable ASCII characters.
+# enable_web_ui = false
+# web_ui_port = 9090
+# web_ui_token = ""
+
+# --- 2025-2026 upgrades ---
+
+# QUIC port blindspot bypass (USENIX Security 2025)
+# GFW only inspects QUIC Initial when src_port > dst_port. Setting src <= dst bypasses.
+# Requires WinDivert to spoof source port. OFF by default (needs testing on your network).
+# enable_quic_port_bypass = false
+# quic_bypass_use_low_port = false  # true = use 443 as src (more stealth, needs admin), false = use dst port itself
+
+# SNI disguise as unknown extension (GREASE/private range)
+# Changes SNI ext type 0x0000 -> 0x0A0A/0xFF00 etc. DPI looking only for 0x0000 misses it.
+# WARNING: breaks virtual-host routing unless used with fronting. Use only Aggressive/Henan.
+# enable_sni_disguise = false
+
+# Domain fronting - benign SNI visible, real hidden in unknown ext 0xFF01
+# Example: front with www.microsoft.com, real example.com hidden.
+# When combined with enable_sni_disguise, creates layered fronting.
+# fronting_benign_sni = ""
+# Example: fronting_benign_sni = "www.microsoft.com"
+
+# Combined TCP+TLS fragmentation for Henan-like regional firewalls (IEEE S&P 2025)
+# Henan firewall is stateless and fails when BOTH TCP segmentation and TLS fragmentation are combined
+# with disorder mode. This is enabled by default and uses profile's recommended chunk size.
+# enable_combined_fragmentation = true
+
+# --- ALL PORTS upgrade (2026) ---
+# By default only 443 is intercepted. Set custom ports for Iran/Russia where DPI on 8443,2053,2083,8080,80
+# intercept_ports = [443, 8443, 2053, 2083, 2087, 2096, 8080, 80]
+# intercept_all_tcp = false  # true = intercept ALL TCP ports (dangerous, testing only)
+# intercept_all_udp = false  # true = intercept ALL UDP ports (for QUIC, testing only)
+
+# uTLS / JA3/JA4 fingerprint rotation (refraction-networking/utls #25)
+# Mimic browser TLS fingerprint to avoid JA3 blocking when SNI mutated
+# enable_utls_fingerprint = false
+# utls_browser = "chrome"  # chrome, firefox, safari, edge, random
+
+# ECH GREASE (draft-ietf-tls-esni, Cloudflare)
+# Inject fake ECH extension with GREASE type to confuse DPI fingerprinting ECH
+# enable_ech_grease = false
+
+# MD5SIG fooling (zapret #89) - adds TCP option 19 with random HMAC, server may drop, DPI may skip
+# enable_md5sig_fooling = false
+
+# Geedge evasion (USENIX 2026 leak #6) - extra TLS padding, GREASE prepend, IP literal detection
+# enable_geedge_evasion = true
+
+# Example for Iran (Henan-like regional firewall):
+# mutation_profile = "Henan"
+# intercept_ports = [443, 8443, 2053, 2083, 2087, 2096, 8080, 80, 4433]
+# enable_quic_port_bypass = true
+# enable_combined_fragmentation = true
+# enable_utls_fingerprint = true
+# utls_browser = "chrome"
+# enable_ech_grease = true
+# fragment_chunk_size = 24
+# enable_geedge_evasion = true
+
+# --- RELAY MODE (patterniha-style) ---
+# Local TCP relay: v2rayN connects to 127.0.0.1:<relay_listen_port>; the
+# relay connects to relay_connect_host:relay_connect_port and injects a fake
+# ClientHello with relay_fake_sni (wrong_seq) so the DPI sees a benign SNI.
+#
+#   v2rayN server settings:
+#     address = 127.0.0.1
+#     port    = relay_listen_port  (e.g. 40443)
+#     SNI     = relay_connect_host  (the REAL server domain, so the real
+#                                    handshake still works — NOT fake_sni)
+#
+# relay_enabled = false
+# relay_listen_port = 40443
+# relay_connect_host = "1.1.1.1"     # IP literal = zero DNS leak, OR a domain
+# relay_connect_port = 443
+# relay_fake_sni = "www.microsoft.com"
+# relay_resolve_doh = true            # resolve a domain via DoH (no plaintext DNS)
+# relay_mutate_real_sni = false       # also run the real ClientHello through SNI mutation
+# relay_emit_decoy = false            # also send a TTL/wrong-checksum decoy of the fake
+# doh_server = "https://cloudflare-dns.com/dns-query"
+#   Tip: use an IP-literal endpoint (https://1.1.1.1/dns-query) for zero
+#   leakage — otherwise the DoH endpoint's own hostname is resolved by the
+#   system resolver first (that leaks only the endpoint name, not your domain).
+
+# The dashboard (enable_web_ui = true) can edit + save this file and start/stop
+# the relay: http://127.0.0.1:9090 — "Relay + config" card. Start/Stop simply
+# toggles relay_enabled and saves; the running relay restarts automatically.

@@ -1,0 +1,40 @@
+[package]
+name = "dpi_guard"
+version = "0.1.0"
+edition = "2021"
+description = "Modular DPI evasion engine (SNI mutation, fragmentation, TCP fooling, stealth, strategy scoring). Windows-only packet I/O via WinDivert."
+license = "MIT"
+
+[lib]
+name = "dpi_guard"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dpi_guard"
+path = "src/main.rs"
+
+[dependencies]
+rand = "0.8"
+rand_distr = "0.4"
+dashmap = "=5.5.3"
+indexmap = "=2.2.6"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+sha2 = "0.10"
+log = "0.4"
+env_logger = "0.11"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "signal", "net", "io-util"] }
+thiserror = "1"
+# DNS-over-HTTPS resolution for relay mode (no plaintext DNS leak).
+# TLS is rustls via ureq's default "tls" feature.
+ureq = { version = "2", features = ["tls"] }
+
+[target.'cfg(windows)'.dependencies]
+windivert = "0.5"
+
+[profile.release]
+# catch_unwind in fail_open requires unwind. abort would black-hole packets.
+panic = "unwind"
+# Integer overflow in length math must panic (caught by fail-open) rather
+# than wrap into an out-of-bounds splice on the live packet path.
+overflow-checks = true
